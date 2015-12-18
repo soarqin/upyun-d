@@ -11,16 +11,30 @@
     },
     "configurations": [
         {
-            "name": "test-win-app",
-            "targetType": "executable",
-            "targetName": "upyun_test",
+            "name": "library",
+            "targetType": "library",
+            "targetName": "upyun-d"
+        },
+        {
+            "name": "library-win",
+            "targetType": "library",
+            "targetName": "upyun-d",
             "platforms": ["windows"],
             "subConfigurations": {"vibe-d": "win32"}
         },
         {
             "name": "test-app",
             "targetType": "executable",
-            "targetName": "upyun_test"
+            "targetName": "upyun_test",
+            "versions": ["VibeCustomMain"]
+        },
+        {
+            "name": "test-app-win",
+            "targetType": "executable",
+            "targetName": "upyun_test",
+            "platforms": ["windows"],
+            "versions": ["VibeCustomMain"],
+            "subConfigurations": {"vibe-d": "win32"}
         }
     ]
 }
