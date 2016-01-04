@@ -1,6 +1,7 @@
 module upyun.d;
 
 private import std.algorithm: startsWith;
+private import std.array: join;
 private import std.datetime;
 private import std.digest.md;
 private import std.file: read, write, exists;
@@ -8,37 +9,39 @@ private import std.format: format;
 private import std.string: split;
 private import vibe.data.json;
 private import vibe.http.client;
+private import vibe.http.form;
 private import vibe.stream.operations;
 
-enum UpYunEndpoint {
+public enum UpYunEndpoint {
    auto_ = 0,
    telecom,
    cnc,
    ctt
 }
 
-struct UpYunRet {
+public struct UpYunRet {
     int statusCode;
     int errorCode;
     string errorMsg;
 }
 
-struct UpYunConfig {
+public struct UpYunConfig {
     string user;
     string passwd;
+    string bucket;
     bool useHttps = false;
     bool debugOutput = false;
     UpYunEndpoint endpoint;
 };
 
-struct UpYunFileInfo {
+public struct UpYunFileInfo {
     string filename;
     bool isFolder;
     ulong size;
     ulong timestamp;
 }
 
-class UpYun {
+public class UpYun {
 private:
     enum {
         MaxFileNameLen = 1024,
@@ -51,6 +54,7 @@ private:
         "v2.api.upyun.com",
         "v3.api.upyun.com"
     ];
+    static string purge_url_ = "http://purge.upyun.com/purge/";
 
     UpYunConfig config_;
     string passhash_;
@@ -139,10 +143,29 @@ public:
         return r.ret;
     }
 
+    int purge(string[] urls) {
+        int statusCode = -1;
+        string purl = urls.join('\n');
+        requestHTTP(purge_url_, (scope req) {
+            req.method = HTTPMethod.POST;
+            string dt = rfc1123Time();
+            req.headers["Date"] = dt;
+            req.headers["Authorization"] = "UpYun %s:%s:%s".format(config_.bucket, config_.user,
+                toHexString!(LetterCase.lower, Order.increasing)(md5Of("%s&%s&%s&%s".format(
+                purl, config_.bucket, dt, passhash_))));
+            req.writeFormBody(["purge": purl]);
+        }, (scope res) {
+            statusCode = res.statusCode;
+            std.stdio.writefln("%s", res.bodyReader.readAllUTF8());
+        });
+        return statusCode;
+    }
+
 private:
     UpYunRetInternal requestInternal(string path, HTTPMethod method, const string[string] headers = null, ubyte[] data = []) {
         UpYunRetInternal result;
-        string url = (config_.useHttps ? "https://" : "http://") ~ api_url_[config_.endpoint] ~ path;
+        string basepath = "/" ~ config_.bucket ~ path;
+        string url = (config_.useHttps ? "https://" : "http://") ~ api_url_[config_.endpoint] ~ basepath;
         requestHTTP(url, (scope req) {
             req.method = method;
             string dt = rfc1123Time();
@@ -150,7 +173,7 @@ private:
             req.headers["Date"] = dt;
             req.headers["Authorization"] = "UpYun %s:%s".format(config_.user,
                 toHexString!(LetterCase.lower, Order.increasing)(md5Of("%s&%s&%s&%s&%s".format(
-                method, path, dt, data.length, passhash_))));
+                method, basepath, dt, data.length, passhash_))));
             foreach(ref k, ref v; headers) {
                 req.headers[k] = v;
             }
