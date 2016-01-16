@@ -12,35 +12,57 @@ private import vibe.http.client;
 private import vibe.http.form;
 private import vibe.stream.operations;
 
+/// UpYun Endpoints
 public enum UpYunEndpoint {
-   auto_ = 0,
-   telecom,
-   cnc,
-   ctt
+    /// Auto select
+    auto_ = 0,
+    /// China Telecom
+    telecom,
+    /// China Unicom(China Netcom)
+    cnc,
+    /// China Tietong(China Mobile)
+    ctt
 }
 
+/// UpYun function return value
 public struct UpYunRet {
+    /// HTTP status code
     int statusCode;
+    /// Error code
     int errorCode;
+    /// Error message
     string errorMsg;
 }
 
+/// UpYun config
 public struct UpYunConfig {
+    /// Username
     string user;
+    /// Password
     string passwd;
+    /// Bucket path, begins with '/'
     string bucket;
+    /// Using https:// instead of http://
     bool useHttps = false;
+    // Print some debug information
     bool debugOutput = false;
+    // Network endpoint
     UpYunEndpoint endpoint;
 };
 
+/// UpYun file info used in listDir
 public struct UpYunFileInfo {
+    /// File name
     string filename;
+    /// Is folder or not
     bool isFolder;
+    /// File size in bytes
     ulong size;
+    /// Unix timestamp
     ulong timestamp;
 }
 
+/// UpYun main class
 public class UpYun {
 private:
     enum {
@@ -66,11 +88,22 @@ private:
     }
 
 public:
+    /// Create UpYun object with certain config
     this(ref UpYunConfig config) {
         config_ = config;
         passhash_ = toHexString!(LetterCase.lower, Order.increasing)(md5Of(config_.passwd)).dup;
     }
 
+    /**
+     * Upload a file
+     *
+     * Params:
+     *   path        = remote path
+     *   localFile   = local file path
+     *   md5Verify   = emit md5 field to verify file after uploading finished
+     *   contentType = overwrite auto detected 'Content-Type' for the file
+     *   secret      = secret key for visiting
+     */
     UpYunRet uploadFile(string path, string localFile, bool md5Verify = false, string contentType = null, string secret = null) {
         if(!exists(localFile)) {
             return UpYunRet(-1, -1, "File not found!");
@@ -78,6 +111,16 @@ public:
         return uploadFile(path, cast(ubyte[])read(localFile), md5Verify, contentType, secret);
     }
 
+    /**
+     * Upload a file
+     *
+     * Params:
+     *   path        = remote path
+     *   data        = file content
+     *   md5Verify   = emit md5 field to verify file after uploading finished
+     *   contentType = overwrite auto detected 'Content-Type' for the file
+     *   secret      = secret key for visiting
+     */
     UpYunRet uploadFile(string path, ubyte[] data, bool md5Verify = false, string contentType = null, string secret = null) {
         string[string] headers;
         if(md5Verify) headers["Content-MD5"] = toHexString!(LetterCase.lower, Order.increasing)(md5Of(data));
@@ -86,6 +129,13 @@ public:
         return requestInternal(path, HTTPMethod.PUT, headers, data).ret;
     }
 
+    /**
+     * Download a file
+     *
+     * Params:
+     *   path        = remote path
+     *   content     = file content downloaded
+     */
     UpYunRet downloadFile(string path, ref ubyte[] content) {
         auto r = requestInternal(path, HTTPMethod.GET);
         if(r.ret.statusCode == 200)
@@ -93,6 +143,13 @@ public:
         return r.ret;
     }
 
+    /**
+     * Download a file
+     *
+     * Params:
+     *   path        = remote path
+     *   localFile   = local path for the downloaded file
+     */
     UpYunRet downloadFile(string path, string localFile) {
         ubyte[] content;
         auto ret = downloadFile(path, content);
@@ -101,6 +158,15 @@ public:
         return ret;
     }
 
+    /**
+     * Get information for a file
+     *
+     * Params:
+     *   path        = remote path
+     *   type        = receives 'Content-Type'
+     *   size        = receives file size in bytes
+     *   timestamp   = receives file time in unix timestamp
+     */
     UpYunRet fileInfo(string path, ref string type, ref ulong size, ref ulong timestamp) {
         auto r = requestInternal(path, HTTPMethod.HEAD);
         if(r.ret.statusCode == 200) {
@@ -114,14 +180,34 @@ public:
         return r.ret;
     }
 
+    /**
+     * Delete a file
+     *
+     * Params:
+     *   path        = remote file path to delete
+     */
     UpYunRet deleteFile(string path) {
         return requestInternal(path, HTTPMethod.DELETE).ret;
     }
 
+    /**
+     * Create a directory
+     *
+     * Params:
+     *   path        = remote directory path to create
+     *   autoMake    = make directories recursively
+     */
     UpYunRet makeDir(string path, bool autoMake = false) {
         return requestInternal(path, HTTPMethod.POST, ["folder": "true", "mkdir": autoMake ? "true" : "false"]).ret;
     }
 
+    /**
+     * List files in a directory
+     *
+     * Params:
+     *   path        = remote directory path to list
+     *   files       = receive files' information
+     */
     UpYunRet listDir(string path, ref UpYunFileInfo[] files) {
         auto r = requestInternal(path, HTTPMethod.GET);
         if(r.ret.statusCode == 200) {
@@ -136,6 +222,13 @@ public:
         return r.ret;
     }
 
+    /**
+     * Get bucket space usage
+     *
+     * Params:
+     *   path        = remote directory path
+     *   bytes       = receive bytes used
+     */
     UpYunRet getUsage(string path, ref ulong bytes) {
         auto r = requestInternal(path ~ ((path.length == 0 || path[$-1] != '/') ? "/?usage" : "?usage"), HTTPMethod.GET);
         if(r.ret.statusCode == 200)
@@ -143,6 +236,12 @@ public:
         return r.ret;
     }
 
+    /**
+     * Purge CDN caches
+     *
+     * Params:
+     *   urls        = list of urls, please supply COMPLETE http urls
+     */
     int purge(string[] urls) {
         int statusCode = -1;
         string purl = urls.join('\n');
