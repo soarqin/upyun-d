@@ -13,7 +13,7 @@ private import vibe.http.form;
 private import vibe.stream.operations;
 
 /// UpYun Endpoints
-public enum UpYunEndpoint {
+public enum Endpoint {
     /// Auto select
     auto_ = 0,
     /// China Telecom
@@ -25,7 +25,7 @@ public enum UpYunEndpoint {
 }
 
 /// UpYun function return value
-public struct UpYunRet {
+public struct Ret {
     /// HTTP status code
     int statusCode;
     /// Error code
@@ -35,7 +35,7 @@ public struct UpYunRet {
 }
 
 /// UpYun upload result headers
-public struct UpYunUploadRes {
+public struct UploadRes {
     int width;
     int height;
     int frames;
@@ -43,7 +43,7 @@ public struct UpYunUploadRes {
 }
 
 /// Gmkerl types
-public enum UpYunGmkerlType {
+public enum GmkerlType {
     ignore,
     fixWidth,
     fixHeight,
@@ -55,14 +55,14 @@ public enum UpYunGmkerlType {
 }
 
 /// Gmkerl on/off switch
-public enum UpYunGmkerlSwitch {
+public enum GmkerlSwitch {
     ignore,
     on,
     off,
 }
 
 /// Gmkerl rotate types
-public enum UpYunGmkerlRotate {
+public enum GmkerlRotate {
     ignore,
     rauto,
     r90,
@@ -70,23 +70,23 @@ public enum UpYunGmkerlRotate {
     r270,
 }
 
-public struct UpYunGmkerl {
+public struct Gmkerl {
     /// image process type
-    UpYunGmkerlType type = UpYunGmkerlType.ignore;
+    GmkerlType type = GmkerlType.ignore;
     /// MMxNN for fixBoth or fixWidthOrHeight, otherwise a simple number, ignored when type is ignore
     string value = null;
     /// image quality(1-100), ignored if set to 0
     int quality = 0;
     /// unsharp image
-    UpYunGmkerlSwitch unsharp = UpYunGmkerlSwitch.ignore;
+    GmkerlSwitch unsharp = GmkerlSwitch.ignore;
     /// image thumbnail params, set in control pannel, ignored if set to null
     string thumbnail = null;
     /// exif switch
-    UpYunGmkerlSwitch exifSwitch = UpYunGmkerlSwitch.ignore;
+    GmkerlSwitch exifSwitch = GmkerlSwitch.ignore;
     /// x,y,width,height like 0,0,100,200, ignored if set to null
     string crop = null;
     /// auto / 90 / 180 / 270
-    UpYunGmkerlRotate rotate = UpYunGmkerlRotate.ignore;
+    GmkerlRotate rotate = GmkerlRotate.ignore;
     /// watermark text, ignored if set to null
     string watermarkText = null;
     /** watermark font, ignored and defaults to simsun if set to null
@@ -123,11 +123,11 @@ public struct UpYunConfig {
     // Print some debug information
     bool debugOutput = false;
     // Network endpoint
-    UpYunEndpoint endpoint;
+    Endpoint endpoint;
 };
 
 /// UpYun file info used in listDir
-public struct UpYunFileInfo {
+public struct FileInfo {
     /// File name
     string filename;
     /// Is folder or not
@@ -152,8 +152,8 @@ private:
     UpYunConfig config_;
     string passhash_;
 
-    struct UpYunRetInternal {
-        UpYunRet ret;
+    struct RetInternal {
+        Ret ret;
         string[string] response;
         ubyte[] bodyRaw;
     }
@@ -177,9 +177,9 @@ public:
      *   contentType = overwrite auto detected 'Content-Type' for the file
      *   secret      = secret key for visiting
      */
-    UpYunRet uploadFile(ref UpYunUploadRes res, string path, string localFile, UpYunGmkerl* gmkerl = null, bool md5Verify = false, string contentType = null, string secret = null) {
+    Ret uploadFile(ref UploadRes res, string path, string localFile, Gmkerl* gmkerl = null, bool md5Verify = false, string contentType = null, string secret = null) {
         if(!exists(localFile)) {
-            return UpYunRet(-1, -1, "File not found!");
+            return Ret(-1, -1, "File not found!");
         }
         return uploadFile(res, path, cast(ubyte[])read(localFile), gmkerl, md5Verify, contentType, secret);
     }
@@ -196,56 +196,56 @@ public:
      *   contentType = overwrite auto detected 'Content-Type' for the file
      *   secret      = secret key for visiting
      */
-    UpYunRet uploadFile(ref UpYunUploadRes res, string path, ubyte[] data, UpYunGmkerl* gmkerl = null, bool md5Verify = false, string contentType = null, string secret = null) {
+    Ret uploadFile(ref UploadRes res, string path, ubyte[] data, Gmkerl* gmkerl = null, bool md5Verify = false, string contentType = null, string secret = null) {
         string[string] headers;
         if (gmkerl !is null) {
             switch(gmkerl.type) {
-                case UpYunGmkerlType.fixWidth:
+                case GmkerlType.fixWidth:
                     headers["x-gmkerl-type"] = "fix_width"; break;
-                case UpYunGmkerlType.fixHeight:
+                case GmkerlType.fixHeight:
                     headers["x-gmkerl-type"] = "fix_height"; break;
-                case UpYunGmkerlType.fixWidthOrHeight:
+                case GmkerlType.fixWidthOrHeight:
                     headers["x-gmkerl-type"] = "fix_width_or_height"; break;
-                case UpYunGmkerlType.fixBoth:
+                case GmkerlType.fixBoth:
                     headers["x-gmkerl-type"] = "fix_both"; break;
-                case UpYunGmkerlType.fixMax:
+                case GmkerlType.fixMax:
                     headers["x-gmkerl-type"] = "fix_max"; break;
-                case UpYunGmkerlType.fixMin:
+                case GmkerlType.fixMin:
                     headers["x-gmkerl-type"] = "fix_min"; break;
-                case UpYunGmkerlType.fixScale:
+                case GmkerlType.fixScale:
                     headers["x-gmkerl-type"] = "fix_scale"; break;
                 default: break;
             }
-            if(gmkerl.type != UpYunGmkerlType.ignore)
+            if(gmkerl.type != GmkerlType.ignore)
                 headers["x-gmkerl-value"] = gmkerl.value;
             if(gmkerl.quality > 0)
                 headers["x-gmkerl-quality"] = gmkerl.quality.to!string;
             switch(gmkerl.unsharp) {
-                case UpYunGmkerlSwitch.on:
+                case GmkerlSwitch.on:
                     headers["x-gmkerl-unsharp"] = "true"; break;
-                case UpYunGmkerlSwitch.off:
+                case GmkerlSwitch.off:
                     headers["x-gmkerl-unsharp"] = "false"; break;
                 default: break;
             }
             if(gmkerl.thumbnail !is null)
                 headers["x-gmkerl-thumbnail"] = gmkerl.thumbnail;
             switch(gmkerl.exifSwitch) {
-                case UpYunGmkerlSwitch.on:
+                case GmkerlSwitch.on:
                     headers["x-gmkerl-exif-switch"] = "true"; break;
-                case UpYunGmkerlSwitch.off:
+                case GmkerlSwitch.off:
                     headers["x-gmkerl-exif-switch"] = "false"; break;
                 default: break;
             }
             if(gmkerl.crop !is null)
                 headers["x-gmkerl-crop"] = gmkerl.crop;
             switch(gmkerl.rotate) {
-                case UpYunGmkerlRotate.rauto:
+                case GmkerlRotate.rauto:
                     headers["x-gmkerl-rotate"] = "auto"; break;
-                case UpYunGmkerlRotate.r90:
+                case GmkerlRotate.r90:
                     headers["x-gmkerl-rotate"] = "90"; break;
-                case UpYunGmkerlRotate.r180:
+                case GmkerlRotate.r180:
                     headers["x-gmkerl-rotate"] = "180"; break;
-                case UpYunGmkerlRotate.r270:
+                case GmkerlRotate.r270:
                     headers["x-gmkerl-rotate"] = "270"; break;
                 default: break;
             }
@@ -290,7 +290,7 @@ public:
      *   path        = remote path
      *   content     = file content downloaded
      */
-    UpYunRet downloadFile(string path, ref ubyte[] content) {
+    Ret downloadFile(string path, ref ubyte[] content) {
         auto r = requestInternal(path, HTTPMethod.GET);
         if(r.ret.statusCode == 200)
             content = r.bodyRaw;
@@ -304,7 +304,7 @@ public:
      *   path        = remote path
      *   localFile   = local path for the downloaded file
      */
-    UpYunRet downloadFile(string path, string localFile) {
+    Ret downloadFile(string path, string localFile) {
         ubyte[] content;
         auto ret = downloadFile(path, content);
         if(ret.statusCode == 200)
@@ -321,7 +321,7 @@ public:
      *   size        = receives file size in bytes
      *   timestamp   = receives file time in unix timestamp
      */
-    UpYunRet fileInfo(string path, ref string type, ref ulong size, ref ulong timestamp) {
+    Ret fileInfo(string path, ref string type, ref ulong size, ref ulong timestamp) {
         auto r = requestInternal(path, HTTPMethod.HEAD);
         if(r.ret.statusCode == 200) {
             auto p = "file-type" in r.response;
@@ -340,7 +340,7 @@ public:
      * Params:
      *   path        = remote file path to delete
      */
-    UpYunRet deleteFile(string path) {
+    Ret deleteFile(string path) {
         return requestInternal(path, HTTPMethod.DELETE).ret;
     }
 
@@ -351,7 +351,7 @@ public:
      *   path        = remote directory path to create
      *   autoMake    = make directories recursively
      */
-    UpYunRet makeDir(string path, bool autoMake = false) {
+    Ret makeDir(string path, bool autoMake = false) {
         return requestInternal(path, HTTPMethod.POST, ["folder": "true", "mkdir": autoMake ? "true" : "false"]).ret;
     }
 
@@ -362,14 +362,14 @@ public:
      *   path        = remote directory path to list
      *   files       = receive files' information
      */
-    UpYunRet listDir(string path, ref UpYunFileInfo[] files) {
+    Ret listDir(string path, ref FileInfo[] files) {
         auto r = requestInternal(path, HTTPMethod.GET);
         if(r.ret.statusCode == 200) {
             auto content = cast(string)r.bodyRaw;
             foreach(l; content.split('\n')) {
                 auto fields = l.split('\t');
                 if(fields.length >= 4) {
-                    files ~= UpYunFileInfo(fields[0], fields[1] == "F", fields[2].to!ulong, fields[3].to!ulong);
+                    files ~= FileInfo(fields[0], fields[1] == "F", fields[2].to!ulong, fields[3].to!ulong);
                 }
             }
         }
@@ -383,7 +383,7 @@ public:
      *   path        = remote directory path
      *   bytes       = receive bytes used
      */
-    UpYunRet getUsage(string path, ref ulong bytes) {
+    Ret getUsage(string path, ref ulong bytes) {
         auto r = requestInternal(path ~ ((path.length == 0 || path[$-1] != '/') ? "/?usage" : "?usage"), HTTPMethod.GET);
         if(r.ret.statusCode == 200)
             bytes = (cast(string)r.bodyRaw).to!ulong;
@@ -415,8 +415,8 @@ public:
     }
 
 private:
-    UpYunRetInternal requestInternal(string path, HTTPMethod method, const string[string] headers = null, ubyte[] data = []) {
-        UpYunRetInternal result;
+    RetInternal requestInternal(string path, HTTPMethod method, const string[string] headers = null, ubyte[] data = []) {
+        RetInternal result;
         string basepath = "/" ~ config_.bucket ~ path;
         string url = (config_.useHttps ? "https://" : "http://") ~ api_url_[config_.endpoint] ~ basepath;
         requestHTTP(url, (scope req) {
