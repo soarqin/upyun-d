@@ -138,6 +138,17 @@ public struct FileInfo {
     ulong timestamp;
 }
 
+
+/// Directory list iterator
+public struct DirIterator {
+    /// count limit of each request
+    int limit = 100;
+    /// false/true for file time ascend/descend
+    bool order = false;
+
+    private string listIter;
+}
+
 /// UpYun main class
 public class UpYun {
 private:
@@ -271,13 +282,13 @@ public:
         if (secret !is null) headers["Content-Secret"] = secret;
         auto r = requestInternal(path, HTTPMethod.PUT, headers, data);
         if(r.ret.statusCode == 200) {
-            auto p = "x-upyun-width" in r.response;
+            auto p = "width" in r.response;
             if(p) res.width = (*p).to!int;
-            p = "x-upyun-height" in r.response;
+            p = "height" in r.response;
             if(p) res.height = (*p).to!int;
-            p = "x-upyun-frames" in r.response;
+            p = "frames" in r.response;
             if(p) res.frames = (*p).to!int;
-            p = "x-upyun-file-type" in r.response;
+            p = "file-type" in r.response;
             if(p) res.fileType = *p;
         }
         return r.ret;
@@ -371,6 +382,46 @@ public:
                 if(fields.length >= 4) {
                     files ~= FileInfo(fields[0], fields[1] == "F", fields[2].to!ulong, fields[3].to!ulong);
                 }
+            }
+        }
+        return r.ret;
+    }
+
+    /**
+     * List files in a directory throught iterator
+     *
+     * Params:
+     *   path        = remote directory path to list
+     *   iter        = reference to the iterator
+     *   callback    = callback delegate to receive file info during iteration
+     *
+     * Note:
+     *   if no more files, Ret.errorCode is 1.
+     */
+    Ret listDir(string path, ref DirIterator iter, void delegate(ref FileInfo fileInfo) callback) {
+        immutable string iterEnd = "g2gCZAAEbmV4dGQAA2VvZg";
+        string[string] headers = ["X-List-Limit": (iter.limit == 0 ? 100 : iter.limit).to!string, "X-List-Order": (iter.order ? "desc" : "asc")];
+        if(iter.listIter.length > 0)
+            headers["X-List-Iter"] = iter.listIter;
+        auto r = requestInternal(path, HTTPMethod.GET, headers);
+        if(r.ret.statusCode == 200) {
+            auto content = cast(string)r.bodyRaw;
+            foreach(l; content.split('\n')) {
+                auto fields = l.split('\t');
+                if(fields.length >= 4) {
+                    FileInfo finfo = FileInfo(fields[0], fields[1] == "F", fields[2].to!ulong, fields[3].to!ulong);
+                    callback(finfo);
+                }
+            }
+
+            auto p = "list-iter" in r.response;
+            if (p !is null) {
+                iter.listIter = *p;
+                if (iter.listIter == iterEnd)
+                    r.ret.errorCode = 1;
+            } else {
+                // TODO: add a special error code to implify that no x-upyun-list-iter in response header
+                r.ret.errorCode = -1;
             }
         }
         return r.ret;
