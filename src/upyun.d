@@ -34,6 +34,82 @@ public struct UpYunRet {
     string errorMsg;
 }
 
+/// UpYun upload result headers
+public struct UpYunUploadRes {
+    int width;
+    int height;
+    int frames;
+    string fileType;
+}
+
+/// Gmkerl types
+public enum UpYunGmkerlType {
+    ignore,
+    fixWidth,
+    fixHeight,
+    fixWidthOrHeight,
+    fixBoth,
+    fixMax,
+    fixMin,
+    fixScale,
+}
+
+/// Gmkerl on/off switch
+public enum UpYunGmkerlSwitch {
+    ignore,
+    on,
+    off,
+}
+
+/// Gmkerl rotate types
+public enum UpYunGmkerlRotate {
+    ignore,
+    rauto,
+    r90,
+    r180,
+    r270,
+}
+
+public struct UpYunGmkerl {
+    /// image process type
+    UpYunGmkerlType type = UpYunGmkerlType.ignore;
+    /// MMxNN for fixBoth or fixWidthOrHeight, otherwise a simple number, ignored when type is ignore
+    string value = null;
+    /// image quality(1-100), ignored if set to 0
+    int quality = 0;
+    /// unsharp image
+    UpYunGmkerlSwitch unsharp = UpYunGmkerlSwitch.ignore;
+    /// image thumbnail params, set in control pannel, ignored if set to null
+    string thumbnail = null;
+    /// exif switch
+    UpYunGmkerlSwitch exifSwitch = UpYunGmkerlSwitch.ignore;
+    /// x,y,width,height like 0,0,100,200, ignored if set to null
+    string crop = null;
+    /// auto / 90 / 180 / 270
+    UpYunGmkerlRotate rotate = UpYunGmkerlRotate.ignore;
+    /// watermark text, ignored if set to null
+    string watermarkText = null;
+    /** watermark font, ignored and defaults to simsun if set to null
+     *  available fonts for Chinese: simsun, simhei, simkai, simli, simyou, simfang
+     */
+    string watermarkFont = null;
+    /// watermark size, ignored and defaults to 32 if set to 0
+    int watermarkSize = 0;
+    /** watermark alignment, the format is valign,halign, ignore if set to null;
+     *  available params for valign: top, middle, bottom
+     *  available params for halign: left, center, right
+     */
+    string watermarkAlign = null;
+    /// watermark margin, x,y, ignored if set to null
+    string watermarkMargin = null;
+    /// watermark opacity, ignored if set to -1
+    int watermarkOpacity = -1;
+    /// watermark color in RGB format #RRGGBB, ignored and defaults to #000000 if set to null
+    string watermarkColor = null;
+    /// watermark border color in RGB format, ignored and defaults to no border if set to null
+    string watermarkBorder = null;
+}
+
 /// UpYun config
 public struct UpYunConfig {
     /// Username
@@ -65,11 +141,6 @@ public struct UpYunFileInfo {
 /// UpYun main class
 public class UpYun {
 private:
-    enum {
-        MaxFileNameLen = 1024,
-        MaxHeaderLen = 512,
-        MaxFileTypeLen = 20,
-    }
     static string[] api_url_ = [
         "v0.api.upyun.com",
         "v1.api.upyun.com",
@@ -98,35 +169,118 @@ public:
      * Upload a file
      *
      * Params:
+     *   res         = receive some params in response headers
      *   path        = remote path
      *   localFile   = local file path
+     *   gmkerl      = Gmkerl data
      *   md5Verify   = emit md5 field to verify file after uploading finished
      *   contentType = overwrite auto detected 'Content-Type' for the file
      *   secret      = secret key for visiting
      */
-    UpYunRet uploadFile(string path, string localFile, bool md5Verify = false, string contentType = null, string secret = null) {
+    UpYunRet uploadFile(ref UpYunUploadRes res, string path, string localFile, UpYunGmkerl* gmkerl = null, bool md5Verify = false, string contentType = null, string secret = null) {
         if(!exists(localFile)) {
             return UpYunRet(-1, -1, "File not found!");
         }
-        return uploadFile(path, cast(ubyte[])read(localFile), md5Verify, contentType, secret);
+        return uploadFile(res, path, cast(ubyte[])read(localFile), gmkerl, md5Verify, contentType, secret);
     }
 
     /**
      * Upload a file
      *
      * Params:
+     *   res         = receive some params in response headers
      *   path        = remote path
      *   data        = file content
+     *   gmkerl      = Gmkerl data
      *   md5Verify   = emit md5 field to verify file after uploading finished
      *   contentType = overwrite auto detected 'Content-Type' for the file
      *   secret      = secret key for visiting
      */
-    UpYunRet uploadFile(string path, ubyte[] data, bool md5Verify = false, string contentType = null, string secret = null) {
+    UpYunRet uploadFile(ref UpYunUploadRes res, string path, ubyte[] data, UpYunGmkerl* gmkerl = null, bool md5Verify = false, string contentType = null, string secret = null) {
         string[string] headers;
-        if(md5Verify) headers["Content-MD5"] = toHexString!(LetterCase.lower, Order.increasing)(md5Of(data));
-        if(contentType !is null) headers["Content-Type"] = contentType;
-        if(secret !is null) headers["Content-Secret"] = secret;
-        return requestInternal(path, HTTPMethod.PUT, headers, data).ret;
+        if (gmkerl !is null) {
+            switch(gmkerl.type) {
+                case UpYunGmkerlType.fixWidth:
+                    headers["x-gmkerl-type"] = "fix_width"; break;
+                case UpYunGmkerlType.fixHeight:
+                    headers["x-gmkerl-type"] = "fix_height"; break;
+                case UpYunGmkerlType.fixWidthOrHeight:
+                    headers["x-gmkerl-type"] = "fix_width_or_height"; break;
+                case UpYunGmkerlType.fixBoth:
+                    headers["x-gmkerl-type"] = "fix_both"; break;
+                case UpYunGmkerlType.fixMax:
+                    headers["x-gmkerl-type"] = "fix_max"; break;
+                case UpYunGmkerlType.fixMin:
+                    headers["x-gmkerl-type"] = "fix_min"; break;
+                case UpYunGmkerlType.fixScale:
+                    headers["x-gmkerl-type"] = "fix_scale"; break;
+                default: break;
+            }
+            if(gmkerl.type != UpYunGmkerlType.ignore)
+                headers["x-gmkerl-value"] = gmkerl.value;
+            if(gmkerl.quality > 0)
+                headers["x-gmkerl-quality"] = gmkerl.quality.to!string;
+            switch(gmkerl.unsharp) {
+                case UpYunGmkerlSwitch.on:
+                    headers["x-gmkerl-unsharp"] = "true"; break;
+                case UpYunGmkerlSwitch.off:
+                    headers["x-gmkerl-unsharp"] = "false"; break;
+                default: break;
+            }
+            if(gmkerl.thumbnail !is null)
+                headers["x-gmkerl-thumbnail"] = gmkerl.thumbnail;
+            switch(gmkerl.exifSwitch) {
+                case UpYunGmkerlSwitch.on:
+                    headers["x-gmkerl-exif-switch"] = "true"; break;
+                case UpYunGmkerlSwitch.off:
+                    headers["x-gmkerl-exif-switch"] = "false"; break;
+                default: break;
+            }
+            if(gmkerl.crop !is null)
+                headers["x-gmkerl-crop"] = gmkerl.crop;
+            switch(gmkerl.rotate) {
+                case UpYunGmkerlRotate.rauto:
+                    headers["x-gmkerl-rotate"] = "auto"; break;
+                case UpYunGmkerlRotate.r90:
+                    headers["x-gmkerl-rotate"] = "90"; break;
+                case UpYunGmkerlRotate.r180:
+                    headers["x-gmkerl-rotate"] = "180"; break;
+                case UpYunGmkerlRotate.r270:
+                    headers["x-gmkerl-rotate"] = "270"; break;
+                default: break;
+            }
+            if(gmkerl.watermarkText !is null)
+                headers["x-gmkerl-watermark-text"] = gmkerl.watermarkText;
+            if(gmkerl.watermarkFont !is null)
+                headers["x-gmkerl-watermark-font"] = gmkerl.watermarkFont;
+            if(gmkerl.watermarkSize > 0)
+                headers["x-gmkerl-watermark-size"] = gmkerl.watermarkSize.to!string;
+            if(gmkerl.watermarkAlign !is null)
+                headers["x-gmkerl-watermark-align"] = gmkerl.watermarkAlign;
+            if(gmkerl.watermarkMargin !is null)
+                headers["x-gmkerl-watermark-margin"] = gmkerl.watermarkMargin;
+            if(gmkerl.watermarkOpacity > -1)
+                headers["x-gmkerl-watermark-opacity"] = gmkerl.watermarkOpacity.to!string;
+            if(gmkerl.watermarkColor !is null)
+                headers["x-gmkerl-watermark-color"] = gmkerl.watermarkColor;
+            if(gmkerl.watermarkBorder !is null)
+                headers["x-gmkerl-watermark-border"] = gmkerl.watermarkBorder;
+        }
+        if (md5Verify) headers["Content-MD5"] = toHexString!(LetterCase.lower, Order.increasing)(md5Of(data));
+        if (contentType !is null) headers["Content-Type"] = contentType;
+        if (secret !is null) headers["Content-Secret"] = secret;
+        auto r = requestInternal(path, HTTPMethod.PUT, headers, data);
+        if(r.ret.statusCode == 200) {
+            auto p = "x-upyun-width" in r.response;
+            if(p) res.width = (*p).to!int;
+            p = "x-upyun-height" in r.response;
+            if(p) res.height = (*p).to!int;
+            p = "x-upyun-frames" in r.response;
+            if(p) res.frames = (*p).to!int;
+            p = "x-upyun-file-type" in r.response;
+            if(p) res.fileType = *p;
+        }
+        return r.ret;
     }
 
     /**
@@ -318,6 +472,9 @@ private:
     }
 }
 
+/**
+ * Create UpYun object
+ */
 public UpYun createUpYun(ref UpYunConfig config) {
     return new UpYun(config);
 }
