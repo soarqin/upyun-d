@@ -1,16 +1,17 @@
 module upyun.d;
 
-private import std.algorithm: startsWith;
-private import std.array: join;
-private import std.datetime;
-private import std.digest.md;
-private import std.file: read, write, exists;
-private import std.format: format;
-private import std.string: split;
-private import vibe.data.json;
-private import vibe.http.client;
-private import vibe.http.form;
-private import vibe.stream.operations;
+private {
+import std.algorithm: startsWith;
+import std.array: join;
+import std.datetime;
+import std.digest.md;
+import std.file: read, write, exists;
+import std.string: format, split;
+import vibe.data.json;
+import vibe.http.client;
+import vibe.http.form;
+import vibe.stream.operations;
+}
 
 /// UpYun Endpoints
 public enum Endpoint {
@@ -449,7 +450,7 @@ public:
      */
     int purge(string[] urls) {
         int statusCode = -1;
-        string purl = urls.join('\n');
+        string purl = urls.join("\n");
         requestHTTP(purge_url_, (scope req) {
             req.method = HTTPMethod.POST;
             string dt = rfc1123Time();
@@ -478,7 +479,7 @@ private:
             req.headers["Authorization"] = "UpYun %s:%s".format(config_.user,
                 toHexString!(LetterCase.lower, Order.increasing)(md5Of("%s&%s&%s&%s&%s".format(
                 method, basepath, dt, data.length, passhash_))));
-            foreach(ref k, ref v; headers) {
+            foreach(k, ref v; headers) {
                 req.headers[k] = v;
             }
             if(data.length > 0)
